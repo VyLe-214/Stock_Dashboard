@@ -1,0 +1,344 @@
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+import requests
+
+# ===================== 1. HÀM LẤY DỮ LIỆU =====================
+def fetch_data(symbol):
+    url = f"https://msh-appdata.cafef.vn/rest-api/api/v1/TradingViewsData?symbol={symbol}&type=D1"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'X-Requested-With': 'XMLHttpRequest',
+    }
+
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        data = response.json()
+        if data.get("succeeded", False) and "data" in data and "value" in data["data"]:
+            data_infor = data["data"]["value"]["dataInfor"]
+            if isinstance(data_infor, list) and len(data_infor) > 0:
+                df = pd.DataFrame(data_infor)
+
+                if 'time' in df.columns:
+                    df['date'] = pd.to_datetime(df['time'].astype(int), unit='s')
+                    df = df.drop(columns=['time'])
+                else:
+                    return pd.DataFrame()
+
+                df = df[df['date'] <= datetime.now()]
+                return df
+            else:
+                return pd.DataFrame()
+        else:
+            return pd.DataFrame()
+    else:
+        return pd.DataFrame()
+
+# ===================== 2. HÀM TÍNH NGÀY BẮT ĐẦU =====================
+def get_start_date_from_tf(tf, df):
+    today = datetime.now()
+    if tf == "5D":
+        return today - relativedelta(days=5)
+    elif tf == "1M":
+        return today - relativedelta(months=1)
+    elif tf == "3M":
+        return today - relativedelta(months=3)
+    elif tf == "6M":
+        return today - relativedelta(months=6)
+    elif tf == "YTD":
+        return datetime(today.year, 1, 1)
+    elif tf == "1Y":
+        return today - relativedelta(years=1)
+    elif tf == "3Y":   # thêm trường hợp 3 năm
+        return today - relativedelta(years=3)
+    elif tf == "ALL":
+        return df['date'].min()
+    else:
+        return df['date'].min()
+
+# ===================== 3. DASHBOARD =====================
+st.set_page_config(page_title="Stock Dashboard", page_icon="📈", layout="wide")
+st.title('📈 Dashboard giá cổ phiếu')
+
+stock_symbols = [
+    'AAA', 'AAM', 'AAT', 'ABR', 'ABS', 'ABT', 'ACB', 'ACC', 'ACG', 'ACL',
+    'ADG', 'ADP', 'ADS', 'AGG', 'AGR', 'ANV', 'APG', 'APH', 'ASG', 'ASM',
+    'ASP', 'AST', 'BAF', 'BBC', 'BCE', 'BCG', 'BCM', 'BFC', 'BHN', 'BIC',
+    'BID', 'BKG', 'BMC', 'BMI', 'BMP', 'BRC', 'BSI', 'BSR', 'BTP', 'BTT',
+    'BVH', 'BWE', 'C32', 'C47', 'CACB2502', 'CACB2503', 'CACB2505', 'CACB2507',
+    'CACB2508', 'CACB2509', 'CACB2510', 'CACB2511', 'CCC', 'CCL', 'CDC',
+    'CFPT2404', 'CFPT2502', 'CFPT2503', 'CFPT2505', 'CFPT2508', 'CFPT2509',
+    'CFPT2511', 'CFPT2512', 'CFPT2513', 'CFPT2514', 'CFPT2515', 'CFPT2516',
+    'CFPT2517', 'CFPT2518', 'CFPT2519', 'CFPT2520', 'CFPT2521', 'CHDB2504',
+    'CHDB2505', 'CHP', 'CHPG2406', 'CHPG2409', 'CHPG2502', 'CHPG2504',
+    'CHPG2505', 'CHPG2506', 'CHPG2508', 'CHPG2510', 'CHPG2513', 'CHPG2514',
+    'CHPG2515', 'CHPG2516', 'CHPG2517', 'CHPG2518', 'CHPG2519', 'CHPG2520',
+    'CHPG2521', 'CHPG2522', 'CHPG2523', 'CHPG2524', 'CHPG2525', 'CHPG2526',
+    'CHPG2527', 'CHPG2528', 'CHPG2529', 'CHPG2531', 'CHPG2532', 'CIG', 'CII',
+    'CKG', 'CLC', 'CLL', 'CLPB2501', 'CLPB2502', 'CLPB2503', 'CLPB2504',
+    'CLPB2508', 'CLW', 'CMBB2407', 'CMBB2503', 'CMBB2504', 'CMBB2505',
+    'CMBB2507', 'CMBB2509', 'CMBB2510', 'CMBB2511', 'CMBB2512', 'CMBB2513',
+    'CMBB2514', 'CMBB2515', 'CMBB2516', 'CMBB2517', 'CMBB2518', 'CMG',
+    'CMSN2406', 'CMSN2503', 'CMSN2507', 'CMSN2508', 'CMSN2509', 'CMSN2510',
+    'CMSN2511', 'CMSN2512', 'CMSN2513', 'CMSN2514', 'CMSN2515', 'CMSN2516',
+    'CMSN2517', 'CMSN2518', 'CMV', 'CMWG2407', 'CMWG2503', 'CMWG2504',
+    'CMWG2505', 'CMWG2507', 'CMWG2508', 'CMWG2509', 'CMWG2510', 'CMWG2511',
+    'CMWG2512', 'CMWG2513', 'CMWG2514', 'CMWG2515', 'CMWG2516', 'CMWG2517',
+    'CMX', 'CNG', 'COM', 'CRC', 'CRE', 'CSHB2504', 'CSHB2505', 'CSHB2506',
+    'CSHB2507', 'CSHB2508', 'CSHB2509', 'CSHB2510', 'CSM', 'CSSB2503',
+    'CSSB2504', 'CSSB2505', 'CSSB2506', 'CSSB2507', 'CSSB2508', 'CSTB2410',
+    'CSTB2502', 'CSTB2504', 'CSTB2505', 'CSTB2509', 'CSTB2512', 'CSTB2513',
+    'CSTB2514', 'CSTB2515', 'CSTB2516', 'CSTB2517', 'CSTB2518', 'CSTB2519',
+    'CSTB2520', 'CSTB2521', 'CSTB2522', 'CSTB2523', 'CSTB2525', 'CSV',
+    'CTCB2403', 'CTCB2503', 'CTCB2504', 'CTCB2506', 'CTCB2507', 'CTCB2508',
+    'CTCB2509', 'CTCB2510', 'CTCB2511', 'CTCB2512', 'CTCB2513', 'CTD', 'CTF',
+    'CTG', 'CTI', 'CTPB2502', 'CTPB2503', 'CTPB2504', 'CTPB2505', 'CTPB2506',
+    'CTR', 'CTS', 'CVHM2502', 'CVHM2503', 'CVHM2511', 'CVHM2512', 'CVHM2513',
+    'CVHM2514', 'CVHM2515', 'CVHM2516', 'CVHM2517', 'CVHM2518', 'CVHM2519',
+    'CVHM2520', 'CVIB2407', 'CVIB2502', 'CVIB2504', 'CVIB2505', 'CVIB2506',
+    'CVIB2507', 'CVIB2508', 'CVIB2509', 'CVIB2510', 'CVIC2502', 'CVIC2509',
+    'CVIC2510', 'CVIC2511', 'CVJC2504', 'CVJC2505', 'CVNM2407', 'CVNM2502',
+    'CVNM2503', 'CVNM2504', 'CVNM2508', 'CVNM2509', 'CVNM2510', 'CVNM2511',
+    'CVNM2512', 'CVNM2513', 'CVNM2514', 'CVNM2515', 'CVNM2516', 'CVNM2517',
+    'CVNM2518', 'CVNM2519', 'CVNM2520', 'CVPB2409', 'CVPB2501', 'CVPB2502',
+    'CVPB2504', 'CVPB2506', 'CVPB2509', 'CVPB2510', 'CVPB2511', 'CVPB2512',
+    'CVPB2513', 'CVPB2514', 'CVPB2515', 'CVPB2516', 'CVPB2517', 'CVPB2519',
+    'CVPB2520', 'CVPB2522', 'CVRE2407', 'CVRE2503', 'CVRE2510', 'CVRE2512',
+    'CVRE2513', 'CVRE2514', 'CVRE2516', 'CVRE2518', 'CVRE2519', 'CVRE2520',
+    'D2D', 'DAH', 'DAT', 'DBC', 'DBD', 'DBT', 'DC4', 'DCL', 'DCM', 'DGC',
+    'DGW', 'DHA', 'DHC', 'DHG', 'DHM', 'DIG', 'DLG', 'DMC', 'DPG', 'DPM',
+    'DPR', 'DQC', 'DRC', 'DRH', 'DRL', 'DSC', 'DSE', 'DSN', 'DTA', 'DTL',
+    'DTT', 'DVP', 'DXG', 'DXS', 'DXV', 'E1VFVN30', 'EIB', 'ELC', 'EVE',
+    'EVF', 'EVG', 'FCM', 'FCN', 'FIR', 'FIT', 'FMC', 'FPT', 'FRT', 'FTS',
+    'FUCVREIT', 'FUEDCMID', 'FUEFCV50', 'FUEIP100', 'FUEKIV30', 'FUEKIVFS',
+    'FUEKIVND', 'FUEMAV30', 'FUEMAVND', 'FUESSV30', 'FUESSV50', 'FUESSVFL',
+    'FUETCC50', 'FUEVFVND', 'FUEVN100', 'GAS', 'GDT', 'GEE', 'GEG', 'GEX',
+    'GIL', 'GMD', 'GMH', 'GSP', 'GTA', 'GVR', 'HAG', 'HAH', 'HAP', 'HAR',
+    'HAX', 'HCD', 'HCM', 'HDB', 'HDC', 'HDG', 'HHP', 'HHS', 'HHV', 'HID',
+    'HII', 'HMC', 'HNA', 'HPG', 'HPX', 'HQC', 'HSG', 'HSL', 'HT1', 'HTG',
+    'HTI', 'HTL', 'HTN', 'HTV', 'HU1', 'HUB', 'HVH', 'HVN', 'HVX', 'ICT',
+    'IDI', 'IJC', 'ILB', 'IMP', 'ITC', 'ITD', 'JVC', 'KBC', 'KDC', 'KDH',
+    'KHG', 'KHP', 'KMR', 'KOS', 'KSB', 'L10', 'LAF', 'LBM', 'LCG', 'LDG',
+    'LGL', 'LHG', 'LIX', 'LPB', 'LSS', 'MBB', 'MCM', 'MCP', 'MHC', 'MIG',
+    'MSB', 'MSH', 'MSN', 'MWG', 'NAB', 'NAF', 'NAV', 'NBB', 'NCT', 'NHA',
+    'NHH', 'NKG', 'NLG', 'NNC', 'NO1', 'NSC', 'NT2', 'NTL', 'NVL', 'NVT',
+    'OCB', 'OGC', 'OPC', 'ORS', 'PAC', 'PAN', 'PC1', 'PDN', 'PDR', 'PET',
+    'PGC', 'PGD', 'PGI', 'PGV', 'PHC', 'PHR', 'PIT', 'PJT', 'PLP', 'PLX',
+    'PMG', 'PNC', 'PNJ', 'POW', 'PPC', 'PTB', 'PTC', 'PTL', 'PVD', 'PVP',
+    'PVT', 'QCG', 'QNP', 'RAL', 'REE', 'RYG', 'SAB', 'SAM', 'SAV', 'SBA',
+    'SBG', 'SBT', 'SBV', 'SC5', 'SCR', 'SCS', 'SFG', 'SFI', 'SGN', 'SGR',
+    'SGT', 'SHA', 'SHB', 'SHI', 'SHP', 'SIP', 'SJD', 'SJS', 'SKG', 'SMA',
+    'SMB', 'SMC', 'SPM', 'SRC', 'SRF', 'SSB', 'SSI', 'ST8', 'STB', 'STK',
+    'SVC', 'SVD', 'SVI', 'SVT', 'SZC', 'SZL', 'TAL', 'TCB', 'TCD', 'TCH',
+    'TCI', 'TCL', 'TCM', 'TCO', 'TCR', 'TCT', 'TDC', 'TDG', 'TDH', 'TDM',
+    'TDP', 'TDW', 'TEG', 'THG', 'TIP', 'TIX', 'TLD', 'TLG', 'TLH', 'TMP',
+    'TMS', 'TMT', 'TN1', 'TNC', 'TNH', 'TNI', 'TNT', 'TPB', 'TPC', 'TRA',
+    'TRC', 'TSC', 'TTA', 'TTF', 'TV2', 'TVB', 'TVS', 'TVT', 'TYA', 'UIC',
+    'VAB', 'VCA', 'VCB', 'VCF', 'VCG', 'VCI', 'VDP', 'VDS', 'VFG', 'VGC',
+    'VHC', 'VHM', 'VIB', 'VIC', 'VID', 'VIP', 'VIX', 'VJC', 'VMD', 'VND',
+    'VNE', 'VNG', 'VNL', 'VNM', 'VNS', 'VOS', 'VPB', 'VPD', 'VPG', 'VPH',
+    'VPI', 'VPL', 'VPS', 'VRC', 'VRE', 'VSC', 'VSH', 'VTB', 'VTO', 'VTP',
+    'YBM', 'YEG', 'AAV', 'ADC', 'ALT', 'AMC', 'AME', 'API', 'APS', 'ATS', 'BAB', 'BCC', 'BKC', 'BNA', 'BTS', 'BVS', 'C69', 'CAG', 'CAN', 'CAP', 'CCR', 'CDN', 'CEO', 'CET', 'CIA', 'CLH', 'CLM', 'CMC', 'CMS', 'CPC', 'CSC', 'CST', 'CTP', 'CTT', 'CX8', 'D11', 'DAD', 'DC2', 'DDG', 'DHT', 'DIH', 'DL1', 'DNC', 'DNP', 'DP3', 'DS3', 'DST', 'DTD', 'DTG', 'DTK', 'DVM', 'DXP', 'EBS', 'ECI', 'EID', 'EVS', 'GDW', 'GIC', 'GKM', 'GLT', 'GMA', 'GMX', 'HAD', 'HAT', 'HBS', 'HCC', 'HDA', 'HGM', 'HKT', 'HLC', 'HLD', 'HMH', 'HMR', 'HOM',
+    'A32', 'AAH', 'AAS', 'ABB', 'ABC', 'ABI', 'ABW', 'ACE', 'ACV', 'AFX',
+    'AG1', 'AGP', 'AGX', 'AIC', 'AIG', 'ALV', 'AMP', 'AMS', 'ANT', 'APC',
+    'APF', 'APP', 'AVC', 'AVG', 'BBH', 'BBM', 'BBT', 'BCA', 'BDG', 'BDT',
+    'BDW', 'BHA', 'BHI', 'BIG', 'BIO', 'BLI', 'BLT', 'BMJ', 'BMK', 'BMS',
+    'BRR', 'BRS', 'BSA', 'BSP', 'BTB', 'BTD', 'BTH', 'BTU', 'BVB', 'BVL',
+    'BVN', 'BWS', 'C22', 'C4G', 'C92', 'CAT', 'CBI', 'CBS', 'CC1', 'CCA',
+    'CCT', 'CDP', 'CDR', 'CFM', 'CFV', 'CGV', 'CID', 'CIP', 'CKA', 'CKD',
+    'CLX', 'CMD', 'CMM', 'CMT', 'CNC', 'CNT', 'CPA', 'CQN', 'CQT', 'CSI',
+    'CTW', 'CTX', 'DAN', 'DAS', 'DBM', 'DC1', 'DCF', 'DCG', 'DCR', 'DDB',
+    'DDN', 'DDV', 'DFF', 'DGT', 'DHB', 'DHD', 'DKG', 'DMN', 'DNA', 'DND',
+    'DNM', 'DP1', 'DPC', 'DPH', 'DRG', 'DRI', 'DSH', 'DTI', 'DTP', 'DVN',
+    'E12', 'ECO', 'EFI', 'EIN', 'EMS', 'EPC', 'F88', 'FIC', 'FOC', 'FOX',
+    'FRM', 'G36', 'GCB', 'GCF', 'GDA', 'GHC', 'GLW', 'GND', 'GPC', 'GSM',
+    'GVT', 'HAC', 'HAN', 'HAV', 'HBC', 'HBH', 'HC3', 'HD2', 'HD6', 'HD8',
+    'HDM', 'HDP', 'HHG', 'HIO', 'HMS', 'HNB', 'HND', 'HNG', 'HNM', 'HPP',
+    'HPW', 'HSM', 'HSP', 'HSV', 'HTE', 'HTM', 'HU4', 'HU6', 'HVA', 'HWS',
+    'ICC', 'ICF', 'ICN', 'IFS', 'IHK', 'ILA', 'ILC', 'ISH', 'IST', 'ITS',
+    'KCB', 'KGM', 'KHW', 'KLB', 'KSQ', 'KVC', 'L12', 'L43', 'LAI', 'LAW',
+    'LEC', 'LG9', 'LIC', 'LKW', 'LLM', 'LMC', 'LNC', 'LPT', 'LSG', 'M10',
+    'MA1', 'MBT', 'MCG', 'MCH', 'MFS', 'MGC', 'MGG', 'MLS', 'MML', 'MNB',
+    'MPC', 'MSR', 'MTA', 'MTL', 'MTP', 'MVC', 'MVN', 'MZG', 'NAS', 'NBE',
+    'NBT', 'NCG', 'NCS', 'ND2', 'NED', 'NJC', 'NNT', 'NS2', 'NTC', 'ODE',
+    'OIL', 'PAP', 'PAS', 'PAT', 'PBC', 'PCF', 'PDV', 'PEG', 'PEQ', 'PFL',
+    'PGB', 'PHP', 'PIV', 'PLA', 'PNP', 'PNT', 'POS', 'POV', 'PPH', 'PRT',
+    'PSB', 'PSL', 'PSP', 'PTM', 'PTV', 'PVM', 'PVO', 'PXL', 'QHW', 'QNS',
+    'QPH', 'QSP', 'QTP', 'RCC', 'RIC', 'RTB', 'SAC', 'SAS', 'SBB', 'SBH',
+    'SBL', 'SBS', 'SCL', 'SD2', 'SD3', 'SDT', 'SEA', 'SEP', 'SGB', 'SGI',
+    'SGP', 'SHC', 'SID', 'SJG', 'SKV', 'SLD', 'SNZ', 'SRB', 'SSG', 'SSH',
+    'STH', 'SVG', 'SZE', 'TA6', 'TAN', 'TCW', 'TDF', 'TDS', 'TEL', 'THP',
+    'TID', 'TIS', 'TLI', 'TLP', 'TMG', 'TNV', 'TOS', 'TRS', 'TRV', 'TSD',
+    'TT6', 'TTN', 'TUG', 'TV1', 'TVN', 'UDC', 'UDJ', 'UPC', 'USD', 'VAV',
+    'VBB', 'VCP', 'VCR', 'VCW', 'VDN', 'VE9', 'VEA', 'VEC', 'VEF', 'VET',
+    'VFC', 'VGG', 'VGI', 'VGR', 'VGT', 'VHD', 'VHG', 'VIM', 'VIN', 'VLB',
+    'VLC', 'VLG', 'VMG', 'VNA', 'VNB', 'VNI', 'VNP', 'VNY', 'VNZ', 'VOC',
+    'VRG', 'VSE', 'VSF', 'VTA', 'VTD', 'VTE', 'VTK', 'VTR', 'VUA', 'VVS',
+    'WSB', 'WTC', 'XMC', 'XMD', 'XPH', 'YBC'
+]
+symbol = st.selectbox('Chọn mã cổ phiếu:', stock_symbols, index=stock_symbols.index('VNM'))
+
+chart_type = st.radio("Chọn kiểu biểu đồ:", ("Biểu đồ Đường", "Biểu đồ Nến"))
+
+
+time_frames = ["5D", "1M", "3M", "6M", "YTD", "1Y", "3Y", "ALL"]  # đã xóa "1D" và thêm "3Y"
+
+time_frame = st.radio("Chọn khoảng thời gian:", time_frames, horizontal=True)
+
+if symbol:
+    st.info(f"Đang lấy dữ liệu cho cổ phiếu {symbol}...")
+    df = fetch_data(symbol)
+
+    if df.empty:
+        st.error("Không có dữ liệu hoặc lỗi khi lấy dữ liệu!")
+    else:
+        # --- Sắp xếp toàn bộ dữ liệu ---
+        df_sorted = df.sort_values(by="date").reset_index(drop=True)
+
+        # --- Khoảng hiển thị ban đầu dựa trên time_frame ---
+        start_view = get_start_date_from_tf(time_frame, df_sorted)
+        end_view = df_sorted['date'].max()
+        if time_frame == "ALL":
+            df_filtered = df_sorted.copy()  # Lấy toàn bộ dữ liệu
+        else:
+            start_view = get_start_date_from_tf(time_frame, df_sorted)
+            df_filtered = df_sorted[df_sorted['date'] >= start_view] # chỉ dùng để tính Y-axis, volume
+
+        if df_filtered.empty:
+            st.warning("Không có dữ liệu trong khoảng thời gian đã chọn.")
+        else:
+            # --- Tính hover text ---
+            df_sorted["Point_Change"] = df_sorted["close"].diff()
+            df_sorted["Pct_Change"] = df_sorted["close"].pct_change() * 100
+
+            hover_text = []
+            for i, row in df_sorted.iterrows():
+                if pd.isna(row["Point_Change"]):
+                    hover_text.append(
+                        f"<b>{symbol}</b><br>Giá: {row['close']:.2f}<br>{row['date'].strftime('%d/%m/%Y')}")
+                else:
+                    if row["Point_Change"] > 0:
+                        sign, color = "+", "green"
+                    elif row["Point_Change"] < 0:
+                        sign, color = "-", "red"
+                    else:
+                        sign, color = "", "yellow"
+                    hover_text.append(f"<b>{symbol}</b><br>Giá: {row['close']:.2f}<br>"
+                                      f"<span style='color:{color}'>{sign}{abs(row['Point_Change']):.2f} "
+                                      f"({sign}{abs(row['Pct_Change']):.2f}%)</span><br>{row['date'].strftime('%d/%m/%Y')}")
+
+            # Xác định màu đường
+            line_color = "green" if df_filtered['close'].iloc[-1] > df_filtered['close'].iloc[0] else "red"
+
+            # --- Trục Y ---
+            data_min = df_filtered['low'].min() if 'low' in df_filtered.columns else df_filtered['close'].min()
+            data_max = df_filtered['high'].max() if 'high' in df_filtered.columns else df_filtered['close'].max()
+            padding_ratio = 0.1
+            y_range = data_max - data_min
+            y_min = data_min - (y_range * padding_ratio *10)
+            y_max = data_max + (y_range * 2 * padding_ratio )
+
+            # --- Scale volume ---
+            volume_scale = (y_max - y_min) * 0.05 / df_filtered['volume'].max()
+
+            # --- Vẽ figure ---
+            fig = go.Figure()
+
+            # Vẽ Volume (Bar, overlay, scaled)
+            fig.add_trace(go.Bar(
+                x=df_filtered['date'],
+                y=df_filtered['volume'] * volume_scale,
+                name='Volume',
+                marker_color=['green' if c >= o else 'red' for c, o in zip(df_filtered['close'], df_filtered['open'])],
+                opacity=0.5,
+                yaxis="y2",  # overlay lên trục giá
+                customdata=df_filtered['volume'],
+                hovertemplate='<b>Volume:</b> %{customdata:,}<extra></extra>',  # hiển thị khối lượng thực
+
+            ))
+
+            # Vẽ Giá (Line hoặc Candlestick)
+            if chart_type == "Biểu đồ Nến":
+                fig.add_trace(go.Candlestick(
+                    x=df_filtered['date'],
+                    open=df_filtered['open'],
+                    high=df_filtered['high'],
+                    low=df_filtered['low'],
+                    close=df_filtered['close'],
+                    name='Giá',
+                    increasing_line_color='green',
+                    decreasing_line_color='red',
+                    text=hover_text,
+                    hoverinfo="text",
+                    yaxis="y"
+                ))
+            else:
+                fig.add_trace(go.Scatter(
+                    x=df_filtered['date'],
+                    y=df_filtered['close'],
+                    mode='lines',
+                    line=dict(color=line_color, width=2.5),
+                    name='Giá Đóng cửa',
+                    text=hover_text,
+                    hoverinfo="text",
+                    yaxis="y"
+                ))
+
+            # Layout
+            fig.update_layout(
+                title=f"Biểu đồ {chart_type} & Volume {symbol} ({time_frame})",
+                xaxis=dict(
+                    title="Ngày",
+                    type="date",  # Giữ dạng ngày
+                    tickformat="%d/%m/%Y",
+                    showgrid=False,
+                    showline=True,
+                    showticklabels=True,
+                    showspikes=True,
+                    spikecolor="white",
+                    spikemode="across",
+                    spikesnap="cursor",
+                    spikethickness=0.3,
+                    rangebreaks=[  # Bỏ các ngày không có dữ liệu
+                        dict(values=[
+                            d for d in pd.date_range(df_filtered['date'].min(), df_filtered['date'].max())
+                            if d not in df_filtered['date'].values
+                        ])
+                    ]
+                ),
+                yaxis=dict(
+                    title="Giá",
+                    side="right",
+                    range=[y_min, y_max],
+                    showticklabels=True,
+                    showgrid=True,
+                    gridcolor='#444444',
+                    showspikes=True,
+                    spikecolor="white",
+                    spikemode="across",
+                    spikesnap="cursor",
+                    spikethickness=0.3
+                ),
+                yaxis2=dict(
+                    overlaying="y",
+                    side="left",
+                    showticklabels=False,
+                    showgrid=False,
+                    range=[0, df_filtered['volume'].max() * volume_scale * 1.5]
+                ),
+                hovermode="x unified",  # Tooltip gióng theo X
+                hoverlabel=dict(
+                    bgcolor="black",
+                    font_size=12,
+                    font_family="Arial",
+                    bordercolor="white"
+                ),
+                template="plotly_dark",
+                height=600
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
